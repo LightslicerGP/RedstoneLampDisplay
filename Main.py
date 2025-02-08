@@ -17,21 +17,23 @@ class Display:
         """
         Initialize the display with:
         - Width and Height of the display (Lamp count),
-        - Pixels per lamp,
-        - Lamps per pixel (2 is default)
+        - Texture size of the lamp (default is 16),
+        - Origin on the y axis (default is bottom left, "BL")
+        - Lamps per pixel (default is 2)
+        - Scale (default is 1x)
+        - Texture pack (default is VanillaPack)
         """
         self.size = (width, height)
         self.lampTextureSize = lampTextureSize
 
-        if origin.upper() in ["TL", "BL"]:
-            self.origin = origin.upper()
-        else:
+        if origin.upper() not in ["TL", "BL"]:
             print("origin is not either 'TL' or 'BL'")
             exit()
+        self.origin = origin.upper()
 
         self.lampsPerPixel = lampsPerPixel
         self.scale = scale
-        self.displayState = [[False for _ in range(height)] for _ in range(width)]
+        self.displayState = [[False] * height for _ in range(width)]
         self.textureLocation = texturePack
 
         pygame.display.set_mode(
@@ -41,18 +43,25 @@ class Display:
             )
         )
 
-        redstone_lamp_off = pygame.transform.scale(
+        self.redstone_lamp_on = pygame.transform.scale(
+            pygame.image.load(self.textureLocation + "/redstone_lamp_on.png"),
+            (self.lampTextureSize * self.scale, self.lampTextureSize * self.scale),
+        )
+        self.redstone_lamp_off = pygame.transform.scale(
             pygame.image.load(self.textureLocation + "/redstone_lamp.png"),
             (self.lampTextureSize * self.scale, self.lampTextureSize * self.scale),
         )
 
+        screen = pygame.display.get_surface()
+        
         for x in range(self.size[0]):
             for y in range(self.size[1]):
-                screen = pygame.display.get_surface()
+                
                 for x_width in range(self.lampsPerPixel):
                     for y_width in range(self.lampsPerPixel):
+                        
                         screen.blit(
-                            redstone_lamp_off,
+                            self.redstone_lamp_off,
                             (
                                 (
                                     (x * self.lampTextureSize * self.lampsPerPixel)
@@ -75,14 +84,9 @@ class Display:
                 if event.key == pygame.K_ESCAPE:
                     return False
                 if event.key == pygame.K_s:
-                    timestamp = datetime.datetime.now().strftime(
-                        "%Y_%m_%d.%H_%M_%S.%f"
-                    )[
-                        :-3
-                    ]  # Including milliseconds
+                    timestamp = datetime.datetime.now().strftime("%Y_%m_%d.%H_%M_%S.%f")[:-3]
                     directory = "screenshots/"
-                    if not os.path.exists(directory):
-                        os.makedirs(directory)
+                    os.makedirs(directory, exist_ok=True)
                     filename = f"{directory}screenshot_{timestamp}.png"
                     pygame.image.save(pygame.display.get_surface(), filename)
                     print("Screenshot saved as:", filename)
@@ -97,28 +101,19 @@ class Display:
                 self.displayState[x][y] = False
 
     def push_buffer(self):
-        redstone_lamp_off = pygame.transform.scale(
-            pygame.image.load(self.textureLocation + "/redstone_lamp.png"),
-            (self.lampTextureSize * self.scale, self.lampTextureSize * self.scale),
-        )
-        redstone_lamp_on = pygame.transform.scale(
-            pygame.image.load(self.textureLocation + "/redstone_lamp_on.png"),
-            (self.lampTextureSize * self.scale, self.lampTextureSize * self.scale),
-        )
 
+        screen = pygame.display.get_surface()
+        
         for x in range(self.size[0]):
             for y in range(self.size[1]):
+                
                 y_adjusted = self.size[1] - y - 1 if self.origin == "BL" else y
-                screen = pygame.display.get_surface()
-
+                
                 for x_width in range(self.lampsPerPixel):
                     for y_width in range(self.lampsPerPixel):
+                        
                         screen.blit(
-                            (
-                                redstone_lamp_off
-                                if self.displayState[x][y] == False
-                                else redstone_lamp_on
-                            ),
+                            self.redstone_lamp_on if self.displayState[x][y] else self.redstone_lamp_off,
                             (
                                 (
                                     (x * self.lampTextureSize * self.lampsPerPixel)
@@ -132,15 +127,16 @@ class Display:
                                 * self.scale,
                             ),
                         )
+                        
         pygame.display.update()
 
 
 import random
 
-width = 20
-height = 20
+width = 100
+height = 100
 
-display = Display(width, height, scale=1.5, texturePack="MattPack")
+display = Display(width, height, scale=0.5, lampsPerPixel=1, texturePack="B&WPack")
 
 while display.alive():
 
