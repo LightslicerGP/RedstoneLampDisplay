@@ -33,7 +33,8 @@ class Display:
 
         self.lampsPerPixel = lampsPerPixel
         self.scale = scale
-        self.displayState = [[False] * height for _ in range(width)]
+        self.displayStateOld = [[False] * height for _ in range(width)]
+        self.displayStateNew = [[False] * height for _ in range(width)]
         self.textureLocation = texturePack
 
         pygame.display.set_mode(
@@ -44,22 +45,22 @@ class Display:
         )
 
         self.redstone_lamp_on = pygame.transform.scale(
-            pygame.image.load(self.textureLocation + "/redstone_lamp_on.png"),
+            pygame.image.load(os.path.join(self.textureLocation, "redstone_lamp_on.png")),
             (self.lampTextureSize * self.scale, self.lampTextureSize * self.scale),
         )
         self.redstone_lamp_off = pygame.transform.scale(
-            pygame.image.load(self.textureLocation + "/redstone_lamp.png"),
+            pygame.image.load(os.path.join(self.textureLocation, "redstone_lamp.png")),
             (self.lampTextureSize * self.scale, self.lampTextureSize * self.scale),
         )
 
         screen = pygame.display.get_surface()
-        
+
         for x in range(self.size[0]):
             for y in range(self.size[1]):
-                
+
                 for x_width in range(self.lampsPerPixel):
                     for y_width in range(self.lampsPerPixel):
-                        
+
                         screen.blit(
                             self.redstone_lamp_off,
                             (
@@ -84,63 +85,94 @@ class Display:
                 if event.key == pygame.K_ESCAPE:
                     return False
                 if event.key == pygame.K_s:
-                    timestamp = datetime.datetime.now().strftime("%Y_%m_%d.%H_%M_%S.%f")[:-3]
-                    directory = "screenshots/"
-                    os.makedirs(directory, exist_ok=True)
-                    filename = f"{directory}screenshot_{timestamp}.png"
-                    pygame.image.save(pygame.display.get_surface(), filename)
-                    print("Screenshot saved as:", filename)
+                    self.screenshot()
         return True
 
+    def screenshot(self):
+        timestamp = datetime.datetime.now().strftime("%Y_%m_%d.%H_%M_%S.%f")[:-3]
+        directory = "screenshots/"
+        os.makedirs(directory, exist_ok=True)
+        filename = f"{directory}screenshot_{timestamp}.png"
+        pygame.image.save(pygame.display.get_surface(), filename)
+        print("Screenshot saved as:", filename)
+
     def set(self, x, y, state):
-        self.displayState[x][y] = state
+        self.displayStateNew[x][y] = state
 
     def clear(self):
         for x in range(self.size[0]):
             for y in range(self.size[1]):
-                self.displayState[x][y] = False
+                self.displayStateNew[x][y] = False
 
     def push_buffer(self):
 
         screen = pygame.display.get_surface()
-        
+
         for x in range(self.size[0]):
             for y in range(self.size[1]):
-                
-                y_adjusted = self.size[1] - y - 1 if self.origin == "BL" else y
-                
-                for x_width in range(self.lampsPerPixel):
-                    for y_width in range(self.lampsPerPixel):
-                        
-                        screen.blit(
-                            self.redstone_lamp_on if self.displayState[x][y] else self.redstone_lamp_off,
-                            (
+                if self.displayStateOld[x][y] != self.displayStateNew[x][y]:
+
+                    y_adjusted = self.size[1] - y - 1 if self.origin == "BL" else y
+
+                    for x_width in range(self.lampsPerPixel):
+                        for y_width in range(self.lampsPerPixel):
+                            screen.blit(
                                 (
-                                    (x * self.lampTextureSize * self.lampsPerPixel)
-                                    + (x_width * self.lampTextureSize)
-                                )
-                                * self.scale,
+                                    self.redstone_lamp_on
+                                    if self.displayStateNew[x][y]
+                                    else self.redstone_lamp_off
+                                ),
                                 (
-                                    (y_adjusted * self.lampTextureSize * self.lampsPerPixel)
-                                    + (y_width * self.lampTextureSize)
-                                )
-                                * self.scale,
-                            ),
-                        )
-                        
+                                    (
+                                        (x * self.lampTextureSize * self.lampsPerPixel)
+                                        + (x_width * self.lampTextureSize)
+                                    )
+                                    * self.scale,
+                                    (
+                                        (
+                                            y_adjusted
+                                            * self.lampTextureSize
+                                            * self.lampsPerPixel
+                                        )
+                                        + (y_width * self.lampTextureSize)
+                                    )
+                                    * self.scale,
+                                ),
+                            )
+
+        self.displayStateOld = [row[:] for row in self.displayStateNew]
+
         pygame.display.update()
 
 
 import random
 
-width = 100
-height = 100
+width = 640
+height = 480
 
-display = Display(width, height, scale=0.5, lampsPerPixel=1, texturePack="B&WPack")
+display = Display(width, height, scale=0.125, lampsPerPixel=1, texturePack="MinimalPack")
+
+ball_x = 1
+ball_y = 0
+
+ball_velocity_x = 1
+ball_velocity_y = 1
 
 while display.alive():
 
-    display.set(random.randint(0, width - 1), random.randint(0, height - 1), True)
-    display.set(random.randint(0, width - 1), random.randint(0, height - 1), False)
+    display.clear()
+
+    # Ball position and velocity
+    ball_x += ball_velocity_x
+    ball_y += ball_velocity_y
+
+    # Check for collision with walls
+    if ball_x >= width - 1 or ball_x <= 0:
+        ball_velocity_x *= -1
+    if ball_y >= height - 1 or ball_y <= 0:
+        ball_velocity_y *= -1
+
+    # Set the ball position on the display
+    display.set(ball_x, ball_y, True)
 
     display.push_buffer()
