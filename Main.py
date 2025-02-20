@@ -25,57 +25,57 @@ class Display:
         """
         self.size = (width, height)
         self.lampTextureSize = lampTextureSize
-
+        self.lampsPerPixel = lampsPerPixel
         if origin.upper() not in ["TL", "BL"]:
             print("origin is not either 'TL' or 'BL'")
             exit()
         self.origin = origin.upper()
 
-        self.lampsPerPixel = lampsPerPixel
         self.scale = scale
-        self.displayStateOld = [[False] * height for _ in range(width)]
-        self.displayStateNew = [[False] * height for _ in range(width)]
+        self.displayState = [[False] * height for _ in range(width)]
         self.textureLocation = texturePack
+        self.changed_cells = set()
+        self.dirty_rects = []
 
-        pygame.display.set_mode(
+        self.lamp_pixel_size = lampTextureSize * scale
+        self.pixel_size = self.lamp_pixel_size * lampsPerPixel
+
+        self.screen = pygame.display.set_mode(
             (
-                width * lampTextureSize * lampsPerPixel * scale,
-                height * lampTextureSize * lampsPerPixel * scale,
-            )
+                width * self.pixel_size,
+                height * self.pixel_size,
+            ),
+            pygame.HWSURFACE | pygame.DOUBLEBUF
         )
 
+        texture_size_scaled = (self.lamp_pixel_size, self.lamp_pixel_size)
         self.redstone_lamp_on = pygame.transform.scale(
             pygame.image.load(os.path.join(self.textureLocation, "redstone_lamp_on.png")),
-            (self.lampTextureSize * self.scale, self.lampTextureSize * self.scale),
-        )
+            texture_size_scaled,
+        ).convert()
         self.redstone_lamp_off = pygame.transform.scale(
             pygame.image.load(os.path.join(self.textureLocation, "redstone_lamp.png")),
-            (self.lampTextureSize * self.scale, self.lampTextureSize * self.scale),
-        )
+            texture_size_scaled,
+        ).convert()
 
-        screen = pygame.display.get_surface()
 
         for x in range(self.size[0]):
             for y in range(self.size[1]):
+                y_adjusted = self.size[1] - y - 1 if self.origin == "BL" else y
+                texture = self.redstone_lamp_off
+                base_pos_x = x * self.pixel_size
+                base_pos_y = y_adjusted * self.pixel_size
 
                 for x_width in range(self.lampsPerPixel):
                     for y_width in range(self.lampsPerPixel):
+                        pos_x = base_pos_x + (x_width * self.lamp_pixel_size)
+                        pos_y = base_pos_y + (y_width * self.lamp_pixel_size)
+                        rect = pygame.Rect(pos_x, pos_y, self.lamp_pixel_size, self.lamp_pixel_size)
+                        self.screen.blit(texture, rect)
 
-                        screen.blit(
-                            self.redstone_lamp_off,
-                            (
-                                (
-                                    (x * self.lampTextureSize * self.lampsPerPixel)
-                                    + (x_width * self.lampTextureSize)
-                                )
-                                * self.scale,
-                                (
-                                    (y * self.lampTextureSize * self.lampsPerPixel)
-                                    + (y_width * self.lampTextureSize)
-                                )
-                                * self.scale,
-                            ),
-                        )
+        pygame.display.flip()
+
+
 
     def alive(self):
         for event in pygame.event.get():
@@ -97,55 +97,48 @@ class Display:
         print("Screenshot saved as:", filename)
 
     def set(self, x, y, state):
-        self.displayStateNew[x][y] = state
+        if 0 <= x < self.size[0] and 0 <= y < self.size[1] and self.displayState[x][y] != state:
+            self.displayState[x][y] = state
+            self.changed_cells.add((x, y))
+
 
     def clear(self):
+        updated = False
         for x in range(self.size[0]):
             for y in range(self.size[1]):
-                self.displayStateNew[x][y] = False
+                if self.displayState[x][y]:
+                    self.displayState[x][y] = False
+                    self.changed_cells.add((x, y))
+                    updated = True
+        return updated
+
 
     def push_buffer(self):
+        if not self.changed_cells:
+            return
 
-        screen = pygame.display.get_surface()
+        self.dirty_rects = []
 
-        for x in range(self.size[0]):
-            for y in range(self.size[1]):
-                if self.displayStateOld[x][y] != self.displayStateNew[x][y]:
+        for x, y in self.changed_cells:
+            y_adjusted = self.size[1] - y - 1 if self.origin == "BL" else y
+            texture = self.redstone_lamp_on if self.displayState[x][y] else self.redstone_lamp_off
+            base_pos_x = x * self.pixel_size
+            base_pos_y = y_adjusted * self.pixel_size
+            rects_to_update = []
 
-                    y_adjusted = self.size[1] - y - 1 if self.origin == "BL" else y
+            for x_width in range(self.lampsPerPixel):
+                for y_width in range(self.lampsPerPixel):
+                    pos_x = base_pos_x + (x_width * self.lamp_pixel_size)
+                    pos_y = base_pos_y + (y_width * self.lamp_pixel_size)
+                    rect = pygame.Rect(pos_x, pos_y, self.lamp_pixel_size, self.lamp_pixel_size)
+                    self.screen.blit(texture, rect)
+                    rects_to_update.append(rect)
 
-                    for x_width in range(self.lampsPerPixel):
-                        for y_width in range(self.lampsPerPixel):
-                            screen.blit(
-                                (
-                                    self.redstone_lamp_on
-                                    if self.displayStateNew[x][y]
-                                    else self.redstone_lamp_off
-                                ),
-                                (
-                                    (
-                                        (x * self.lampTextureSize * self.lampsPerPixel)
-                                        + (x_width * self.lampTextureSize)
-                                    )
-                                    * self.scale,
-                                    (
-                                        (
-                                            y_adjusted
-                                            * self.lampTextureSize
-                                            * self.lampsPerPixel
-                                        )
-                                        + (y_width * self.lampTextureSize)
-                                    )
-                                    * self.scale,
-                                ),
-                            )
+            self.dirty_rects.extend(rects_to_update)
 
-        self.displayStateOld = [row[:] for row in self.displayStateNew]
-
-        pygame.display.update()
-
-
-import random
+        self.changed_cells.clear()
+        pygame.display.update(self.dirty_rects)
+        self.dirty_rects = []
 
 width = 640
 height = 480

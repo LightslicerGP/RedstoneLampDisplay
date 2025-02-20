@@ -11,3 +11,5 @@
 - [x] Programatically save a screenshot
 
 in parallel to [MattBattWing's version](https://github.com/mattbatwings/lampsim) and [Matthias' version](https://github.com/Matthias1590/LampDisplay)
+
+OPTIMIZATIONS BY stickman_cookies (he used ai but hey its faster, all functionality still works)
